@@ -1,0 +1,782 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
+/**
+ * Lightweight, in-chat Furniture Company Management System
+ * - Single-file React app
+ * - Dual Kanban (Orders + Expenses)
+ * - HTML5 drag & drop (mouse + touch)
+ * - Stage-specific quick modal
+ * - Live financial metrics (revenue, expenses, outstanding)
+ * - LocalStorage persistence
+ * - Tailwind-only styling (no external UI libs)
+ *
+ * NOTE: This is a lighter, fully client-side version intended to be used right here.
+ */
+
+// -------------------- Types --------------------
+const ORDER_STAGES = [
+  "Quotations",
+  "Orders",
+  "WIP",
+  "Completed",
+  "Delivered",
+  "Paid",
+] as const;
+
+const EXPENSE_STAGES = [
+  "PO Sent",
+  "Goods Received",
+  "Bill Received",
+  "Approved",
+  "Paid",
+  "Archived",
+] as const;
+
+function formatINR(n) {
+  if (n == null || isNaN(n)) return "₹0";
+  const val = Math.round(Number(n) * 100) / 100;
+  return val.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+}
+
+const PROGRESS_BY_STAGE = {
+  Quotations: 10,
+  Orders: 25,
+  WIP: 50,
+  Completed: 75,
+  Delivered: 90,
+  Paid: 100,
+};
+
+// -------------------- Demo Seed --------------------
+const seedData = () => ({
+  orders: [
+    {
+      id: "o-001",
+      customer: "Meraki Interiors",
+      stage: "Quotations",
+      quoteAmount: 65000,
+      finalPrice: null,
+      advance: 0,
+      outstanding: 0,
+      materials: [],
+      vendor: null,
+      startedAt: new Date().toISOString(),
+      dueAt: null,
+      notes: "Modular wardrobe 6x7 ft",
+    },
+    {
+      id: "o-002",
+      customer: "ABC Developers",
+      stage: "WIP",
+      quoteAmount: 120000,
+      finalPrice: 130000,
+      advance: 30000,
+      outstanding: 100000,
+      materials: [
+        { item: "Plywood 19mm", qty: 10, unit: "pcs", vendor: "WoodMart", estCost: 18000, actualCost: null },
+        { item: "Laminate 1mm", qty: 8, unit: "sheets", vendor: "Merino Dealer", estCost: 12000, actualCost: null },
+      ],
+      vendor: "WoodMart",
+      startedAt: new Date().toISOString(),
+      dueAt: null,
+      notes: "Kitchen L-Shape 10ft",
+    },
+  ],
+  expenses: [
+    {
+      id: "e-101",
+      vendor: "WoodMart",
+      stage: "PO Sent",
+      billAmount: 18000,
+      forOrderId: "o-002",
+      items: ["Plywood 19mm"],
+      orderedAt: new Date().toISOString(),
+      dueAt: null,
+      paidAmount: 0,
+    },
+  ],
+  vendors: [
+    { id: "v-1", name: "WoodMart", contact: "+91 98765 43210" },
+    { id: "v-2", name: "Merino Dealer", contact: "+91 91234 56780" },
+  ],
+  customers: [
+    { id: "c-1", name: "Meraki Interiors" },
+    { id: "c-2", name: "ABC Developers" },
+  ],
+});
+
+const STORAGE_KEY = "furniture-lite-kanban";
+
+function usePersistentState() {
+  const [state, setState] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return seedData();
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {}
+  }, [state]);
+  return [state, setState];
+}
+
+// -------------------- Utilities --------------------
+const cls = (...xs) => xs.filter(Boolean).join(" ");
+const shortDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—");
+
+// -------------------- Modal --------------------
+function Modal({ open, title, onClose, children }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-[520px] max-w-[95vw] max-h-[80vh] overflow-auto rounded-xl bg-white p-5 shadow-2xl">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100" aria-label="Close">✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// -------------------- Drag & Drop Core --------------------
+/**
+ * Simple HTML5 drag & drop helpers.
+ * We encode the card id & source list in dataTransfer.
+ */
+function useDrag() {
+  const dragData = useRef(null);
+  const onDragStart = (e, payload) => {
+    dragData.current = payload; // { type: 'order'|'expense', id }
+    e.dataTransfer.setData("text/plain", JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onDragOver = (e) => {
+    e.preventDefault(); // allow drop
+    e.dataTransfer.dropEffect = "move";
+  };
+  const readData = (e) => {
+    try {
+      const t = e.dataTransfer.getData("text/plain");
+      return t ? JSON.parse(t) : dragData.current;
+    } catch (err) {
+      return dragData.current;
+    }
+  };
+  return { onDragStart, onDragOver, readData };
+}
+
+// -------------------- Main App --------------------
+export default function App() {
+  const [db, setDb] = usePersistentState();
+  const { onDragStart, onDragOver, readData } = useDrag();
+
+  const [activeModal, setActiveModal] = useState(null); // { type: 'order'|'expense', id, stage }
+  const [workflowTab, setWorkflowTab] = useState("both"); // 'both' | 'orders' | 'expenses'
+
+  // ------------- Derived Financials -------------
+  const metrics = useMemo(() => {
+    const revenueReceived = db.orders
+      .map((o) => (o.stage === "Orders" || o.stage === "WIP" || o.stage === "Completed" || o.stage === "Delivered" || o.stage === "Paid" ? Number(o.advance || 0) : 0))
+      .reduce((a, b) => a + b, 0);
+    const finalPaid = db.orders
+      .map((o) => (o.stage === "Paid" ? Number(o.finalPrice || 0) : 0))
+      .reduce((a, b) => a + b, 0);
+    const totalRevenue = revenueReceived + finalPaid;
+
+    const expensePaid = db.expenses
+      .map((e) => (e.stage === "Paid" ? Number(e.billAmount || 0) : 0))
+      .reduce((a, b) => a + b, 0);
+
+    const outstandingPayments = db.orders
+      .map((o) => {
+        const fp = Number(o.finalPrice || 0);
+        const adv = Number(o.advance || 0);
+        const paid = o.stage === "Paid" ? fp : adv; // simplified
+        const out = Math.max(0, fp - paid);
+        return isNaN(out) ? 0 : out;
+      })
+      .reduce((a, b) => a + b, 0);
+
+    const billsToPay = db.expenses
+      .filter((e) => ["Goods Received", "Bill Received", "Approved"].includes(e.stage))
+      .map((e) => Number(e.billAmount || 0))
+      .reduce((a, b) => a + b, 0);
+
+    return {
+      totalRevenue,
+      expensePaid,
+      outstandingPayments,
+      billsToPay,
+    };
+  }, [db]);
+
+  // ------------- Moves -------------
+  function moveCard(type, id, newStage) {
+    if (type === "order") {
+      setDb((prev) => {
+        const next = { ...prev, orders: prev.orders.map((o) => (o.id === id ? { ...o, stage: newStage } : o)) };
+        return next;
+      });
+      // Open modal for stage-specific data on valid transitions
+      setActiveModal({ type: "order", id, stage: newStage });
+    } else if (type === "expense") {
+      setDb((prev) => {
+        const next = { ...prev, expenses: prev.expenses.map((e) => (e.id === id ? { ...e, stage: newStage } : e)) };
+        return next;
+      });
+      setActiveModal({ type: "expense", id, stage: newStage });
+    }
+  }
+
+  function onDropStage(e, type, stage) {
+    const data = readData(e);
+    if (!data || data.type !== type) return; // invalid drop target
+    e.preventDefault();
+    moveCard(type, data.id, stage);
+  }
+
+  // ------------- Create / Quick Add -------------
+  function quickAddOrder() {
+    const id = `o-${Date.now()}`;
+    setDb((prev) => ({
+      ...prev,
+      orders: [
+        {
+          id,
+          customer: "New Customer",
+          stage: "Quotations",
+          quoteAmount: 0,
+          finalPrice: null,
+          advance: 0,
+          outstanding: 0,
+          materials: [],
+          vendor: null,
+          startedAt: new Date().toISOString(),
+          dueAt: null,
+          notes: "",
+        },
+        ...prev.orders,
+      ],
+    }));
+  }
+
+  function quickAddExpense() {
+    const id = `e-${Date.now()}`;
+    setDb((prev) => ({
+      ...prev,
+      expenses: [
+        {
+          id,
+          vendor: "New Vendor",
+          stage: "PO Sent",
+          billAmount: 0,
+          forOrderId: null,
+          items: [],
+          orderedAt: new Date().toISOString(),
+          dueAt: null,
+          paidAmount: 0,
+        },
+        ...prev.expenses,
+      ],
+    }));
+  }
+
+  // ------------- Editors (Modal Forms) -------------
+  function updateOrder(id, patch) {
+    setDb((prev) => ({ ...prev, orders: prev.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
+  }
+  function updateExpense(id, patch) {
+    setDb((prev) => ({ ...prev, expenses: prev.expenses.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  }
+
+  // Auto-create expense POs when materials added in WIP (lightweight)
+  function syncPOsFromMaterials(order) {
+    if (!order || !order.materials || order.materials.length === 0) return;
+    const groups = new Map();
+    order.materials.forEach((m) => {
+      const key = m.vendor || "Unknown Vendor";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(m);
+    });
+    setDb((prev) => {
+      const newExpenses = [...prev.expenses];
+      groups.forEach((items, vendor) => {
+        const exists = newExpenses.find((e) => e.forOrderId === order.id && e.vendor === vendor);
+        const est = items.reduce((a, m) => a + Number(m.estCost || 0), 0);
+        if (exists) {
+          exists.items = Array.from(new Set([...(exists.items || []), ...items.map((i) => i.item)]));
+          exists.billAmount = est || exists.billAmount;
+        } else {
+          newExpenses.unshift({
+            id: `e-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            vendor,
+            stage: "PO Sent",
+            billAmount: est,
+            forOrderId: order.id,
+            items: items.map((i) => i.item),
+            orderedAt: new Date().toISOString(),
+            dueAt: null,
+            paidAmount: 0,
+          });
+        }
+      });
+      return { ...prev, expenses: newExpenses };
+    });
+  }
+
+  // -------------------- UI Pieces --------------------
+  function MetricCard({ title, value, sub }) {
+    return (
+      <div className="rounded-2xl border border-gray-200 p-4 shadow-sm">
+        <div className="text-sm text-gray-500">{title}</div>
+        <div className="mt-1 text-2xl font-semibold">{formatINR(value)}</div>
+        {sub && <div className="mt-1 text-xs text-gray-500">{sub}</div>}
+      </div>
+    );
+  }
+
+  function ProgressBar({ stage }) {
+    const pct = PROGRESS_BY_STAGE[stage] || 0;
+    return (
+      <div className="mt-2 h-2 w-full rounded bg-gray-100">
+        <div
+          className="h-2 rounded bg-blue-500 transition-[width] duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    );
+  }
+
+  function OrderCard({ o }) {
+    return (
+      <div
+        draggable
+        onDragStart={(e) => onDragStart(e, { type: "order", id: o.id })}
+        className={cls(
+          "work-card group cursor-grab rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-all hover:scale-[1.02] hover:shadow-md",
+          "active:cursor-grabbing"
+        )}
+      >
+        <div className="flex items-start justify-between">
+          <div className="truncate text-[16px] font-semibold text-gray-900" title={o.customer}>
+            {o.customer}
+          </div>
+          <button
+            className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100"
+            onClick={() => setActiveModal({ type: "order", id: o.id, stage: o.stage })}
+          >
+            •••
+          </button>
+        </div>
+        <div className="mt-2 text-sm">
+          {o.finalPrice != null ? (
+            <>
+              <div className="font-medium">{formatINR(o.finalPrice)} (Final)</div>
+              <div className="text-gray-600">
+                {formatINR(o.advance)} advance • {formatINR(Math.max(0, (o.finalPrice || 0) - (o.stage === "Paid" ? o.finalPrice : o.advance || 0)))} outstanding
+              </div>
+            </>
+          ) : (
+            <div className="text-gray-600">Quote: {formatINR(o.quoteAmount || 0)}</div>
+          )}
+        </div>
+        <ProgressBar stage={o.stage} />
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+          {o.materials?.length ? <span>Materials: {o.materials.length}</span> : <span>No materials</span>}
+          {o.vendor ? <span>• Vendor: {o.vendor}</span> : null}
+          <span className="ml-auto">Started: {shortDate(o.startedAt)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  function ExpenseCard({ x }) {
+    return (
+      <div
+        draggable
+        onDragStart={(e) => onDragStart(e, { type: "expense", id: x.id })}
+        className="group cursor-grab rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-all hover:scale-[1.02] hover:shadow-md"
+      >
+        <div className="flex items-start justify-between">
+          <div className="truncate text-[16px] font-semibold text-gray-900" title={x.vendor}>
+            {x.vendor}
+          </div>
+          <button
+            className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100"
+            onClick={() => setActiveModal({ type: "expense", id: x.id, stage: x.stage })}
+          >
+            •••
+          </button>
+        </div>
+        <div className="mt-2 text-sm">
+          <div className="font-medium">{formatINR(x.billAmount)} (Bill)</div>
+          <div className="text-gray-600">For: {x.forOrderId || "General"}</div>
+        </div>
+        <div className="mt-2 text-xs text-gray-600">Items: {x.items?.length || 0}</div>
+        <div className="mt-2 text-xs text-gray-600">Ordered: {shortDate(x.orderedAt)} • Due: {shortDate(x.dueAt)}</div>
+      </div>
+    );
+  }
+
+  function StageColumn({ title, cards, type, stage }) {
+    return (
+      <div
+        className="flex min-h-[200px] w-[280px] min-w-[280px] flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50/50 p-3"
+        onDragOver={onDragOver}
+        onDrop={(e) => onDropStage(e, type, stage)}
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <div className="text-sm font-semibold text-gray-700">{title}</div>
+          <div className="text-xs text-gray-500">{cards.length}</div>
+        </div>
+        {cards.map((c) => (
+          <div key={c.id}>{type === "order" ? <OrderCard o={c} /> : <ExpenseCard x={c} />}</div>
+        ))}
+      </div>
+    );
+  }
+
+  // ------------- Layout -------------
+  const groupedOrders = useMemo(() => {
+    const m = Object.fromEntries(ORDER_STAGES.map((s) => [s, []]));
+    db.orders.forEach((o) => m[o.stage]?.push(o));
+    return m;
+  }, [db.orders]);
+
+  const groupedExpenses = useMemo(() => {
+    const m = Object.fromEntries(EXPENSE_STAGES.map((s) => [s, []]));
+    db.expenses.forEach((x) => m[x.stage]?.push(x));
+    return m;
+  }, [db.expenses]);
+
+  // ------------- Modal Forms -------------
+  const activeRecord = useMemo(() => {
+    if (!activeModal) return null;
+    const { type, id } = activeModal;
+    if (type === "order") return db.orders.find((o) => o.id === id);
+    return db.expenses.find((x) => x.id === id);
+  }, [activeModal, db]);
+
+  function OrderForm({ o }) {
+    const [form, setForm] = useState({
+      customer: o.customer || "",
+      quoteAmount: o.quoteAmount ?? 0,
+      finalPrice: o.finalPrice ?? "",
+      advance: o.advance ?? 0,
+      vendor: o.vendor ?? "",
+      dueAt: o.dueAt ?? "",
+      notes: o.notes ?? "",
+    });
+
+    function apply() {
+      const finalPrice = form.finalPrice === "" ? null : Number(form.finalPrice);
+      const advance = Number(form.advance || 0);
+      const patch = { ...form, finalPrice, advance };
+      // auto outstanding calc
+      if (finalPrice != null) patch.outstanding = Math.max(0, finalPrice - (o.stage === "Paid" ? finalPrice : advance));
+      updateOrder(o.id, patch);
+      // if in WIP and materials present => sync POs
+      if (o.stage === "WIP") syncPOsFromMaterials({ ...o, ...patch });
+      setActiveModal(null);
+    }
+
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <LabeledInput label="Customer" value={form.customer} onChange={(v) => setForm((s) => ({ ...s, customer: v }))} />
+          <LabeledInput label="Vendor (primary)" value={form.vendor} onChange={(v) => setForm((s) => ({ ...s, vendor: v }))} />
+          <LabeledNumber label="Quote Amount" value={form.quoteAmount} onChange={(v) => setForm((s) => ({ ...s, quoteAmount: v }))} />
+          <LabeledNumber label="Final Price" value={form.finalPrice} onChange={(v) => setForm((s) => ({ ...s, finalPrice: v }))} />
+          <LabeledNumber label="Advance" value={form.advance} onChange={(v) => setForm((s) => ({ ...s, advance: v }))} />
+          <LabeledDate label="Due Date" value={form.dueAt} onChange={(v) => setForm((s) => ({ ...s, dueAt: v }))} />
+        </div>
+        <LabeledTextArea label="Notes" value={form.notes} onChange={(v) => setForm((s) => ({ ...s, notes: v }))} />
+
+        {o.stage === "WIP" && (
+          <MaterialsEditor
+            materials={o.materials || []}
+            onChange={(newMaterials) => updateOrder(o.id, { materials: newMaterials })}
+          />
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button className="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setActiveModal(null)}>
+            Cancel
+          </button>
+          <button className="rounded-xl bg-blue-600 px-3 py-2 text-sm text-white shadow hover:bg-blue-700" onClick={apply}>
+            Save
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function ExpenseForm({ x }) {
+    const [form, setForm] = useState({
+      vendor: x.vendor || "",
+      billAmount: x.billAmount ?? 0,
+      forOrderId: x.forOrderId ?? "",
+      dueAt: x.dueAt ?? "",
+      items: (x.items || []).join(", "),
+    });
+    function apply() {
+      const patch = { ...form, billAmount: Number(form.billAmount || 0), items: form.items ? form.items.split(",").map((s) => s.trim()).filter(Boolean) : [] };
+      updateExpense(x.id, patch);
+      setActiveModal(null);
+    }
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <LabeledInput label="Vendor" value={form.vendor} onChange={(v) => setForm((s) => ({ ...s, vendor: v }))} />
+          <LabeledNumber label="Bill Amount" value={form.billAmount} onChange={(v) => setForm((s) => ({ ...s, billAmount: v }))} />
+          <LabeledInput label="For Order ID" value={form.forOrderId} onChange={(v) => setForm((s) => ({ ...s, forOrderId: v }))} />
+          <LabeledDate label="Due Date" value={form.dueAt} onChange={(v) => setForm((s) => ({ ...s, dueAt: v }))} />
+        </div>
+        <LabeledInput label="Items (comma separated)" value={form.items} onChange={(v) => setForm((s) => ({ ...s, items: v }))} />
+        <div className="flex justify-end gap-2 pt-2">
+          <button className="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setActiveModal(null)}>
+            Cancel
+          </button>
+          <button className="rounded-xl bg-blue-600 px-3 py-2 text-sm text-white shadow hover:bg-blue-700" onClick={apply}>
+            Save
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function StageModal() {
+    if (!activeModal || !activeRecord) return null;
+    const { type, stage } = activeModal;
+    const title = `${type === "order" ? "Order" : "Expense"} · ${stage}`;
+    return (
+      <Modal open title={title} onClose={() => setActiveModal(null)}>
+        {type === "order" ? <OrderForm o={activeRecord} /> : <ExpenseForm x={activeRecord} />}
+      </Modal>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col gap-4 bg-gray-100 p-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-bold">Furniture Company Management (Lite)</h1>
+        <div className="ml-auto flex items-center gap-2">
+          <button className="rounded-xl border px-3 py-1.5 text-sm hover:bg-gray-50" onClick={quickAddOrder}>
+            + Order
+          </button>
+          <button className="rounded-xl border px-3 py-1.5 text-sm hover:bg-gray-50" onClick={quickAddExpense}>
+            + Expense
+          </button>
+          <button
+            className="rounded-xl border px-3 py-1.5 text-sm hover:bg-gray-50"
+            onClick={() => {
+              if (confirm("Reset all data?")) setDb(seedData());
+            }}
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      {/* Metrics */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard title="Revenue (received)" value={metrics.totalRevenue} sub="Advance + Final payments" />
+        <MetricCard title="Expenses (paid)" value={metrics.expensePaid} />
+        <MetricCard title="Outstanding Payments" value={metrics.outstandingPayments} />
+        <MetricCard title="Bills To Pay" value={metrics.billsToPay} />
+      </div>
+
+      {/* Workflow Tabs for small screens */}
+      <div className="flex items-center gap-2 lg:hidden">
+        {[
+          { key: "both", label: "Both" },
+          { key: "orders", label: "Orders" },
+          { key: "expenses", label: "Expenses" },
+        ].map((t) => (
+          <button
+            key={t.key}
+            className={cls("rounded-xl border px-3 py-1.5 text-sm", workflowTab === t.key ? "bg-white shadow" : "hover:bg-gray-50")}
+            onClick={() => setWorkflowTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Boards */}
+      <div className={cls("kanban-container flex flex-col gap-4", workflowTab === "orders" ? "lg:flex-col" : "lg:flex-col")}>
+        {(workflowTab === "both" || workflowTab === "orders") && (
+          <section className="customer-orders rounded-2xl border border-gray-200 bg-white p-3 shadow-sm lg:h-[60vh]">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Customer Orders</h2>
+            </div>
+            <div className="flex w-full gap-3 overflow-x-auto pb-2">
+              {ORDER_STAGES.map((s) => (
+                <StageColumn key={s} title={s} type="order" stage={s} cards={groupedOrders[s]} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {(workflowTab === "both" || workflowTab === "expenses") && (
+          <section className="expense-orders rounded-2xl border border-gray-200 bg-white p-3 shadow-sm lg:h-[40vh]">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Expenses</h2>
+            </div>
+            <div className="flex w-full gap-3 overflow-x-auto pb-2">
+              {EXPENSE_STAGES.map((s) => (
+                <StageColumn key={s} title={s} type="expense" stage={s} cards={groupedExpenses[s]} />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+
+      <StageModal />
+    </div>
+  );
+}
+
+// -------------------- Small Form Controls --------------------
+function LabeledInput({ label, value, onChange, placeholder }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-xs text-gray-600">{label}</span>
+      <input
+        className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+        value={value ?? ""}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+function LabeledNumber({ label, value, onChange }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-xs text-gray-600">{label}</span>
+      <input
+        type="number"
+        className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+        value={value ?? 0}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+}
+function LabeledDate({ label, value, onChange }) {
+  const v = value ? new Date(value).toISOString().slice(0, 10) : "";
+  return (
+    <label className="grid gap-1">
+      <span className="text-xs text-gray-600">{label}</span>
+      <input
+        type="date"
+        className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+        value={v}
+        onChange={(e) => onChange(e.target.value ? new Date(e.target.value).toISOString() : "")}
+      />
+    </label>
+  );
+}
+function LabeledTextArea({ label, value, onChange }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-xs text-gray-600">{label}</span>
+      <textarea
+        rows={3}
+        className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+function MaterialsEditor({ materials, onChange }) {
+  const [rows, setRows] = useState(materials);
+  useEffect(() => setRows(materials), [materials]);
+
+  function updateRow(i, patch) {
+    const next = rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r));
+    setRows(next);
+    onChange(next);
+  }
+  function addRow() {
+    const next = [...rows, { item: "", qty: 1, unit: "pcs", vendor: "", estCost: 0, actualCost: null }];
+    setRows(next);
+    onChange(next);
+  }
+  function removeRow(i) {
+    const next = rows.filter((_, idx) => idx !== i);
+    setRows(next);
+    onChange(next);
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-sm font-medium">Materials</div>
+        <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={addRow}>
+          + Add Item
+        </button>
+      </div>
+      <div className="grid grid-cols-12 gap-2">
+        <div className="col-span-4 text-xs text-gray-500">Item</div>
+        <div className="col-span-2 text-xs text-gray-500">Qty</div>
+        <div className="col-span-2 text-xs text-gray-500">Unit</div>
+        <div className="col-span-2 text-xs text-gray-500">Vendor</div>
+        <div className="col-span-2 text-xs text-gray-500">Est. Cost</div>
+        {rows.map((r, i) => (
+          <React.Fragment key={i}>
+            <input
+              className="col-span-4 rounded-lg border px-2 py-1 text-sm"
+              value={r.item}
+              onChange={(e) => updateRow(i, { item: e.target.value })}
+              placeholder="e.g., Plywood 19mm"
+            />
+            <input
+              type="number"
+              className="col-span-2 rounded-lg border px-2 py-1 text-sm"
+              value={r.qty}
+              onChange={(e) => updateRow(i, { qty: Number(e.target.value) })}
+            />
+            <select
+              className="col-span-2 rounded-lg border px-2 py-1 text-sm"
+              value={r.unit}
+              onChange={(e) => updateRow(i, { unit: e.target.value })}
+            >
+              <option>pcs</option>
+              <option>kg</option>
+              <option>meters</option>
+              <option>sheets</option>
+            </select>
+            <input
+              className="col-span-2 rounded-lg border px-2 py-1 text-sm"
+              value={r.vendor}
+              onChange={(e) => updateRow(i, { vendor: e.target.value })}
+              placeholder="Vendor name"
+            />
+            <input
+              type="number"
+              className="col-span-2 rounded-lg border px-2 py-1 text-sm"
+              value={r.estCost ?? 0}
+              onChange={(e) => updateRow(i, { estCost: Number(e.target.value) })}
+            />
+            <div className="col-span-12 flex justify-end">
+              <button className="mt-1 rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50" onClick={() => removeRow(i)}>
+                Remove
+              </button>
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}

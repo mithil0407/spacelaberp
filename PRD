@@ -1,0 +1,153 @@
+# Furniture Company Management System ## Detailed Functionality & Design Specification --- ## 1. Product Overview ### Vision Statement A minimal, Notion-inspired kanban-based management system for furniture companies that seamlessly tracks customer orders and expenses through intelligent workflow stages with automated data collection and financial tracking. ### Core Features - **Dual-workflow Kanban**: Customer orders + expense tracking on unified interface - **Intelligent Data Collection**: Stage-specific prompts with data persistence - **Connected Operations**: Automatic linking between orders, materials, and vendors - **Real-time Financial Tracking**: Live revenue/expense calculations with outstanding payments --- ## 2. Detailed Functionality Specifications ### 2.1 Kanban Board System #### Layout Architecture - **Screen Division**: 60% customer orders (top), 40% expenses (bottom) - **Columns**: 6 stages each workflow, equal width distribution - **Viewport**: Full-screen application, no external navigation needed - **Responsive Breakpoints**: - Desktop (1024px+): Full dual-board view - Tablet (768-1023px): Stacked boards with tab switching - Mobile (<768px): Single workflow view with toggle button #### Drag & Drop Behavior ##### Drag Initiation - **Trigger**: Mouse down + 150ms hold OR immediate touch drag on mobile - **Visual Feedback**: - Card opacity reduces to 0.8 - Cursor changes to grabbing hand - Card lifts with 0 8px 24px rgba(0,0,0,0.15) shadow - Slight rotation (2deg) for natural feel ##### During Drag - **Ghost Card**: Semi-transparent placeholder remains in original position - **Drop Zones**: - Valid zones highlight with blue border (#3B82F6, 2px) - Invalid zones show red border (#EF4444, 2px) with X icon - Smooth border animation (150ms ease-out) - **Auto-scroll**: - Trigger when cursor within 50px of screen edge - Scroll speed: 2px per frame, accelerates to 8px per frame - Works both horizontally (columns) and vertically (cards within column) ##### Drop Behavior - **Valid Drop**: - Card smoothly animates to new position (200ms ease-out) - Triggers stage-specific data modal immediately - Updates all connected data automatically - **Invalid Drop**: - Card bounces back to original position with elastic animation - Brief error message appears: "Cannot move to this stage" - Error message fades after 2 seconds - **Edge Cases**: - **Network failure during drop**: Card returns to original position, shows retry option - **Concurrent modifications**: Last action wins, shows conflict notification - **Rapid successive drags**: Debounce to prevent multiple modals opening ##### Backward Movement Logic - **Data Preservation**: All entered data remains accessible but becomes editable - **Financial Reversal**: - Remove from revenue/expense totals - Reverse automated calculations (outstanding payments, profit margins) - Mark as "revised" in audit trail - **Connected Data**: - Maintain links to materials/vendors but mark as "pending revision" - Purchase orders remain but get flagged for review ### 2.2 Work Card Design & Functionality #### Card Structure
+┌─────────────────────────────────────────┐
+│ [Customer Name]                [Menu •••]│
+│                                          │
+│ ₹45,000 (Final Price)                   │
+│ ₹15,000 advance • ₹30,000 outstanding   │
+│                                          │
+│ ████████████░░░░ 75%                    │
+│                                          │
+│ [Materials: 5 items] [Vendor: ABC Corp] │
+│                                          │
+│ Started: 15 Jan • Due: 30 Jan           │
+└─────────────────────────────────────────┘
+#### Visual Specifications - **Dimensions**: 280px width × 160px height (minimum, expands based on content) - **Background**: Pure white (#FFFFFF) - **Border**: 1px solid #E5E5E5 - **Border radius**: 8px - **Padding**: 16px - **Typography**: - Customer name: 16px, font-weight 600, #1A1A1A - Amounts: 14px, font-weight 500 - Meta info: 12px, #6B6B6B #### Interactive States - **Default**: Subtle shadow 0 2px 4px rgba(0,0,0,0.05) - **Hover**: Elevated shadow 0 4px 12px rgba(0,0,0,0.1), slight scale 1.02 - **Dragging**: Strong shadow 0 8px 24px rgba(0,0,0,0.15), opacity 0.8 - **Selected**: Blue border 2px solid #3B82F6 #### Progress Bar Logic - **Quotations Sent**: 10% (basic info entered) - **Orders**: 25% (financial terms confirmed) - **Work in Progress**: 50% (materials planned, work started) - **Order Completed**: 75% (production finished) - **Delivered**: 90% (product delivered) - **Payment Received**: 100% (transaction complete) #### Dynamic Content Display - **Stage-specific info priority**: - Quotations: Quote amount, date - Orders: Final price, advance, outstanding - WIP: Material count, primary vendor - Completed: Completion date, delivery timeline - Delivered: Delivery date, payment due - Paid: Payment date, total amount ### 2.3 Stage-Specific Data Collection #### Modal Design System - **Overlay**: rgba(0,0,0,0.5) backdrop with blur effect - **Modal Container**: - Width: 520px (desktop), 95vw (mobile) - Max-height: 80vh with internal scroll - Background: White with 12px border-radius - Shadow: 0 20px 64px rgba(0,0,0,0.15) - **Header**: - Stage name with progress indicator - Close button (×) in top-right - Current stage highlighted in mini-progress bar #### Form Field Specifications ##### Input Types & Validation 1. **Currency Fields**: - Format: ₹ symbol prefix, comma separators - Validation: Numbers only, max 2 decimal places - Auto-calculation triggers on blur 2. **Date Fields**: - Default: Current date - Format: DD MMM YYYY (15 Jan 2024) - Validation: Cannot be future date for completed actions 3. **Dropdown Fields (Vendors)**: - Searchable with type-ahead - "Add New Vendor" option at bottom - Shows vendor's last order date in hover tooltip 4. **Material Fields**: - Item name: Text with autocomplete from previous entries - Quantity: Number input with unit selector (pcs, kg, meters) - Add/remove rows dynamically #### Data Flow & Calculations ##### Quotations Sent → Orders **Data Carried Forward**: Customer name, quote date, quoted amount **New Data Required**: - Final quoted price (editable, defaults to original quote) - Advance received amount **Auto-calculations**: - Outstanding payment = Final price - Advance - Updates customer's total order value ##### Orders → Work in Progress **Data Carried Forward**: All previous data **New Data Required**: - Materials list (item, quantity, vendor) **Auto-actions**: - Generate purchase order entries for each vendor - Link materials to current customer order - Update vendor relationship records ##### Financial Impact Tracking - **Revenue Recognition**: - Advance payments recorded when moving to "Orders" - Final payment recorded at "Payment Received" - **Expense Tracking**: - Material costs estimated at WIP stage - Actual costs recorded when bills are paid - **Profit Calculation**: - Estimated: Revenue - Estimated material costs - Actual: Final revenue - Actual expenses paid ### 2.4 Expense Workflow Integration #### Automatic Purchase Order Generation When materials are added in WIP stage: 1. **Vendor Grouping**: Group materials by vendor automatically 2. **PO Creation**: Create expense cards in "Purchase Orders Sent" column 3. **Linking**: Maintain bidirectional links between customer order and PO 4. **Material Tracking**: Show which customer order each material purchase is for #### Expense Card Design
+┌─────────────────────────────────────────┐
+│ [Vendor Name]              [Link to Order]│
+│                                          │
+│ ₹12,000 (Bill Amount)                   │
+│ For: Customer ABC Order                  │
+│                                          │
+│ Items: Plywood, Screws, Paint (3 items) │
+│                                          │
+│ Ordered: 20 Jan • Due: 25 Jan           │
+└─────────────────────────────────────────┘
+#### Manual Expense Entry - **General Expenses**: Electricity, rent, salaries (not linked to specific orders) - **Quick Add**: Plus button in each expense column - **Categories**: Dropdown with common expense types ### 2.5 Vendor Management System #### Vendor Profile Panel - **Trigger**: Click vendor name anywhere in system - **Slide-in Panel**: 400px wide, slides from right - **Content Sections**: 1. **Vendor Info**: Name, contact details, first order date 2. **Order History**: Chronological list with amounts and dates 3. **Payment Status**: Outstanding bills highlighted in red 4. **Performance Metrics**: Average delivery time, payment terms 5. **Quick Actions**: New purchase order, record payment #### Vendor Autocomplete Logic - **Learning System**: Remember vendor-material combinations - **Smart Suggestions**: Suggest vendors based on material type - **Quick Add**: Inline vendor addition without leaving current context ### 2.6 Customer Management System #### Customer Profile Sidebar - **Trigger**: Click customer name on any card - **Slide-in Design**: Similar to vendor panel - **Content**: 1. **Customer Summary**: Name, total orders, lifetime value 2. **Order Timeline**: Visual timeline of all orders with status 3. **Payment History**: All payments with dates and amounts 4. **Outstanding Amounts**: Highlighted with payment reminders 5. **Quick Actions**: New order, record payment, send reminder #### Customer Data Intelligence - **Repeat Customer Detection**: Flag customers with multiple orders - **Payment Behavior**: Track average payment delays - **Order Patterns**: Seasonal trends, typical order values ### 2.7 Financial Dashboard #### Layout Structure - **Top Row**: Key metric cards (4 cards, equal width) - **Second Row**: Time filter tabs + export button - **Main Area**: Split between revenue/expense charts and data tables - **Bottom**: Outstanding payments and bills summary #### Metric Cards Design
+┌─────────────────────┐  ┌─────────────────────┐
+│ This Month Revenue  │  │ This Month Expenses │
+│ ₹1,45,000          │  │ ₹67,000            │
+│ ↑ 23% from last    │  │ ↑ 12% from last    │
+└─────────────────────┘  └─────────────────────┘
+
+┌─────────────────────┐  ┌─────────────────────┐
+│ Outstanding Payments│  │ Bills to Pay        │
+│ ₹89,000 (12 orders)│  │ ₹23,000 (5 bills)  │
+│ Avg age: 8 days     │  │ Due soon: 3 bills   │
+└─────────────────────┘  └─────────────────────┘
+#### Time Filter Implementation - **Tabs**: Today, This Week, This Month, Custom Range - **Default**: Current month view - **Comparison**: Always show comparison to previous period - **Custom Range**: Date picker with preset options (Last 3 months, Last 6 months, etc.) #### Real-time Updates - **Live Calculations**: Update immediately when cards move between stages - **WebSocket Connection**: Use Supabase real-time for instant updates - **Optimistic Updates**: Update UI immediately, sync with database in background --- ## 3. Advanced Edge Cases & Handling ### 3.1 Data Consistency Challenges #### Concurrent Modifications - **Scenario**: Multiple browser tabs, same order modified simultaneously - **Solution**: - Show conflict dialog with both versions - Allow user to choose which data to keep - Implement optimistic locking with timestamps #### Partial Network Failures - **Scenario**: Drag succeeds but modal data save fails - **Solution**: - Queue failed operations with retry mechanism - Show "Syncing..." indicator until resolved - Allow offline work with sync when connection restores #### Data Migration Between Stages - **Scenario**: Moving from WIP back to Orders affects generated POs - **Solution**: - Mark linked POs as "Under Review" - Provide option to cancel/modify linked expenses - Maintain audit trail of all changes ### 3.2 User Interface Edge Cases #### Long Content Handling - **Long customer names**: Truncate with ellipsis, full name on hover - **Many materials**: Scroll within card, "Show all X items" link - **Large amounts**: Smart formatting (₹1.2L instead of ₹120,000) #### Mobile Interaction Challenges - **Touch drag precision**: Larger drop zones on mobile (50px minimum) - **Modal scrolling**: Prevent background scroll when modal open - **Keyboard handling**: Smooth scroll to focused input fields #### Browser Compatibility - **Safari drag issues**: Implement touch-based drag for iOS - **Firefox animation**: Use transform instead of position animations - **Edge scrolling**: Test auto-scroll behavior across browsers ### 3.3 Business Logic Edge Cases #### Payment Scenarios - **Overpayment**: Handle when customer pays more than outstanding - **Partial payments**: Allow multiple installments, track each separately - **Refunds**: Support negative payments with proper accounting #### Material Management - **Duplicate materials**: Check for duplicates, offer to combine quantities - **Vendor changes**: Handle when vendor for existing material changes - **Material cancellation**: What happens to linked POs when order cancelled #### Time-based Logic - **Past-dated entries**: Allow but show warning for data integrity - **Future dates**: Prevent for completed actions, allow for planning - **Timezone handling**: Use local timezone consistently throughout --- ## 4. Technical Implementation Details ### 4.1 Drag & Drop Technical Specs #### Library Selection - **Primary**: @dnd-kit/core for React 18 compatibility - **Fallback**: react-beautiful-dnd for older browsers - **Mobile**: Custom touch handlers for iOS Safari issues #### Performance Optimization - **Virtual Scrolling**: Implement when columns have >50 cards - **Debounced Updates**: 300ms delay for auto-scroll triggers - **Memory Management**: Cleanup drag listeners on component unmount #### State Management During Drag - **Global State**: Use Zustand for drag state management - **Local State**: React useState for immediate UI feedback - **Persistence**: Auto-save drafts during drag operations ### 4.2 Database Optimization #### Indexing Strategy
+sql
+-- Performance indexes
+CREATE INDEX idx_customer_orders_stage ON customer_orders(stage);
+CREATE INDEX idx_customer_orders_customer ON customer_orders(customer_id);
+CREATE INDEX idx_purchase_orders_vendor ON purchase_orders(vendor_id);
+CREATE INDEX idx_transactions_date ON transactions(date DESC);
+CREATE INDEX idx_materials_order ON materials(order_id);
+#### Real-time Subscriptions
+sql
+-- Supabase real-time channels
+-- Channel 1: Customer orders updates
+-- Channel 2: Purchase orders updates  
+-- Channel 3: Financial transactions
+-- Channel 4: Vendor/customer profile changes
+#### Data Validation Triggers
+sql
+-- Ensure outstanding_payment calculation accuracy
+-- Prevent negative quantities
+-- Validate stage transitions
+-- Auto-update customer/vendor totals
+### 4.3 Component Architecture #### Reusable Components
+typescript
+// Core kanban components
+<KanbanBoard workflows={['orders', 'expenses']} />
+<DragDropProvider onDrop={handleDrop} />
+<WorkCard data={cardData} stage={currentStage} />
+<StageColumn title="Orders" cards={orderCards} />
+
+// Modal system
+<StageDataModal stage="wip" cardData={data} />
+<ConfirmationModal action="delete" onConfirm={handleDelete} />
+
+// Dashboard components
+<MetricCard title="Revenue" value={revenue} trend={+12} />
+<FinancialChart type="line" data={revenueData} />
+<OutstandingTable payments={outstandingPayments} />
+#### State Management Structure
+typescript
+// Zustand stores
+interface AppState {
+  // Kanban state
+  customerOrders: OrderCard[]
+  purchaseOrders: ExpenseCard[]
+  dragState: DragState
+  
+  // UI state
+  activeModal: ModalType | null
+  selectedCustomer: Customer | null
+  selectedVendor: Vendor | null
+  
+  // Financial state
+  metrics: FinancialMetrics
+  outstandingPayments: Payment[]
+  
+  // Actions
+  moveCard: (cardId: string, newStage: string) => void
+  updateCard: (cardId: string, data: Partial<Card>) => void
+  showModal: (type: ModalType, data?: any) => void
+}
+--- ## 5. Design System Implementation ### 5.1 Component Library Structure #### Base Components (Shadcn/UI) - Button variants (primary, secondary, ghost, danger) - Input fields (text, number, currency, date, select) - Modal/Dialog system with backdrop - Card container with consistent styling - Progress bars with animations #### Custom Components - DragHandle with grab cursor and hover effects - CurrencyInput with formatting and validation - DatePicker with Indian date format - VendorSelect with search and add functionality - MaterialRow with dynamic add/remove ### 5.2 Animation & Micro-interactions #### Transition Specifications
+css
+/* Card hover effects */
+.work-card {
+  transition: all 150ms ease-out;
+  transform-origin: center;
+}
+.work-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Drag animations */
+.dragging {
+  transform: rotate(2deg);
+  z-index: 1000;
+  transition: transform 200ms ease-out;
+}
+
+/* Modal entrance */
+.modal-enter {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: all 200ms ease-out;
+}
+.modal-enter-active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Progress bar animation */
+.progress-fill {
+  transition: width 300ms ease-out;
+  background: linear-gradient(90deg, #3B82F6, #60A5FA);
+}
+#### Responsive Design Breakpoints
+css
+/* Mobile First Approach */
+.kanban-container {
+  display: flex;
+  flex-direction: column; /* Mobile: stacked */
+}
+
+@media (min-width: 768px) {
+  .kanban-container {
+    flex-direction: row; /* Tablet: side by side */
+  }
+}
+
+@media (min-width: 1024px) {
+  .kanban-container {
+    /* Desktop: full dual-board layout */
+    .customer-orders { height: 60vh; }
+    .expense-orders { height: 40vh; }
+  }
+}
+### 5.3 Accessibility Considerations #### Keyboard Navigation - **Tab order**: Logical flow through cards and controls - **Enter/Space**: Activate drag mode for keyboard users - **Arrow keys**: Navigate between cards during keyboard drag - **Escape**: Cancel drag operation, close modals #### Screen Reader Support - **ARIA labels**: Descriptive labels for all interactive elements - **Live regions**: Announce drag/drop results and financial updates - **Focus management**: Proper focus handling in modals and after drag operations #### Visual Accessibility - **Color contrast**: All text meets WCAG AA standards (4.5:1 ratio) - **Focus indicators**: Clear blue outline (2px solid #3B82F6) - **Motion preferences**: Respect prefers-reduced-motion for animations --- *This comprehensive specification covers all functionality, edge cases, and implementation details needed to build a production-ready furniture company management system.*
