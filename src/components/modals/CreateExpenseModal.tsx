@@ -40,15 +40,22 @@ export function CreateExpenseModal({ open, onClose }: CreateExpenseModalProps) {
       
       if (!vendorId) {
         setIsCreatingVendor(true)
-        const newVendor = await createVendor({
-          name: form.vendor_name.trim(),
-          contact: '',
-          email: '',
-          phone: '',
-          address: '',
-          payment_terms: 30,
-        })
-        vendorId = newVendor.id
+        try {
+          const newVendor = await createVendor({
+            name: form.vendor_name.trim(),
+            contact: '',
+            email: '',
+            phone: '',
+            address: '',
+            payment_terms: 30,
+          })
+          vendorId = newVendor.id
+        } catch (error) {
+          console.error('Failed to create vendor:', error)
+          alert('Failed to create vendor. Please try again.')
+          setIsCreatingVendor(false)
+          return
+        }
         setIsCreatingVendor(false)
       }
 

@@ -40,13 +40,20 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
       
       if (!customerId) {
         setIsCreatingCustomer(true)
-        const newCustomer = await createCustomer({
-          name: form.customer_name.trim(),
-          email: '',
-          phone: '',
-          address: '',
-        })
-        customerId = newCustomer.id
+        try {
+          const newCustomer = await createCustomer({
+            name: form.customer_name.trim(),
+            email: '',
+            phone: '',
+            address: '',
+          })
+          customerId = newCustomer.id
+        } catch (error) {
+          console.error('Failed to create customer:', error)
+          alert('Failed to create customer. Please try again.')
+          setIsCreatingCustomer(false)
+          return
+        }
         setIsCreatingCustomer(false)
       }
 
