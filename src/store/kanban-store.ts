@@ -35,8 +35,8 @@ interface KanbanState {
   updateExpense: (id: string, updates: Partial<Expense>) => Promise<void>
   createOrder: (orderData: Partial<CustomerOrder>) => Promise<void>
   createExpense: (expenseData: Partial<Expense>) => Promise<void>
-  createCustomer: (customer: Omit<Customer, 'id' | 'created_at' | 'updated_at'>) => Promise<void>
-  createVendor: (vendor: Omit<Vendor, 'id' | 'created_at' | 'updated_at'>) => Promise<void>
+  createCustomer: (customer: Omit<Customer, 'id' | 'created_at' | 'updated_at'>) => Promise<Customer>
+  createVendor: (vendor: Omit<Vendor, 'id' | 'created_at' | 'updated_at'>) => Promise<Vendor>
   
   // UI Actions
   setActiveModal: (modal: ModalState) => void
