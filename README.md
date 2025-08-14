@@ -61,6 +61,13 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
+### For Vercel Deployment:
+1. Go to your Vercel project dashboard
+2. Navigate to Settings → Environment Variables
+3. Add the same environment variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
 ### 3. Install Dependencies
 
 ```bash
