@@ -162,7 +162,7 @@ export const useKanbanStore = create<KanbanState>()(
       }
     },
 
-    createOrder: async (orderData) => {
+    createOrder: async (orderData: Partial<CustomerOrder>): Promise<void> => {
       try {
         const newOrder = await dbService.createCustomerOrder({
           customer_id: orderData.customer_id || '',
@@ -181,10 +181,11 @@ export const useKanbanStore = create<KanbanState>()(
       } catch (error) {
         console.error('Failed to create order:', error)
         set({ error: error instanceof Error ? error.message : 'Failed to create order' })
+        throw error
       }
     },
 
-    createExpense: async (expenseData) => {
+    createExpense: async (expenseData: Partial<Expense>): Promise<void> => {
       try {
         const newExpense = await dbService.createExpense({
           vendor_id: expenseData.vendor_id || '',
@@ -203,10 +204,11 @@ export const useKanbanStore = create<KanbanState>()(
       } catch (error) {
         console.error('Failed to create expense:', error)
         set({ error: error instanceof Error ? error.message : 'Failed to create expense' })
+        throw error
       }
     },
 
-    createCustomer: async (customer) => {
+    createCustomer: async (customer: Omit<Customer, 'id' | 'created_at' | 'updated_at'>): Promise<Customer> => {
       try {
         const newCustomer = await dbService.createCustomer(customer)
         set(state => ({
@@ -220,7 +222,7 @@ export const useKanbanStore = create<KanbanState>()(
       }
     },
 
-    createVendor: async (vendor) => {
+    createVendor: async (vendor: Omit<Vendor, 'id' | 'created_at' | 'updated_at'>): Promise<Vendor> => {
       try {
         const newVendor = await dbService.createVendor(vendor)
         set(state => ({
