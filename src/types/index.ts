@@ -23,7 +23,7 @@ export interface Vendor {
 
 export interface CustomerOrder {
   id: string;
-  customer_id: string;
+  customer_id: string | null;
   order_number: string;
   stage: OrderStage;
   quote_amount: number;
@@ -47,7 +47,7 @@ export interface CustomerOrder {
 
 export interface Material {
   id: string;
-  order_id: string;
+  order_id: string | null;
   item_name: string;
   quantity: number;
   unit: string;
@@ -62,7 +62,7 @@ export interface Material {
 
 export interface Expense {
   id: string;
-  vendor_id: string;
+  vendor_id: string | null;
   expense_number: string;
   stage: ExpenseStage;
   bill_amount: number;
@@ -82,7 +82,7 @@ export interface Expense {
 
 export interface ExpenseItem {
   id: string;
-  expense_id: string;
+  expense_id: string | null;
   item_name: string;
   quantity?: number | null;
   unit_price?: number | null;
@@ -157,7 +157,7 @@ export const PROGRESS_BY_STAGE: Record<OrderStage, number> = {
 
 // Form types
 export interface OrderFormData {
-  customer_id: string;
+  customer_id: string | null;
   quote_amount: number;
   final_price?: number | null;
   advance: number;
@@ -167,7 +167,7 @@ export interface OrderFormData {
 }
 
 export interface ExpenseFormData {
-  vendor_id: string;
+  vendor_id: string | null;
   bill_amount: number;
   for_order_id?: string | null;
   due_at?: string | null;

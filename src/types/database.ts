@@ -78,7 +78,7 @@ export interface Database {
       customer_orders: {
         Row: {
           id: string
-          customer_id: string
+          customer_id: string | null
           order_number: string
           stage: string
           quote_amount: number
@@ -97,7 +97,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          customer_id: string
+          customer_id?: string | null
           order_number: string
           stage: string
           quote_amount?: number
@@ -116,7 +116,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          customer_id?: string
+          customer_id?: string | null
           order_number?: string
           stage?: string
           quote_amount?: number
@@ -151,7 +151,7 @@ export interface Database {
       materials: {
         Row: {
           id: string
-          order_id: string
+          order_id: string | null
           item_name: string
           quantity: number
           unit: string
@@ -163,7 +163,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          order_id: string
+          order_id?: string | null
           item_name: string
           quantity: number
           unit?: string
@@ -175,7 +175,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          order_id?: string
+          order_id?: string | null
           item_name?: string
           quantity?: number
           unit?: string
@@ -203,7 +203,7 @@ export interface Database {
       expenses: {
         Row: {
           id: string
-          vendor_id: string
+          vendor_id: string | null
           expense_number: string
           stage: string
           bill_amount: number
@@ -218,7 +218,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          vendor_id: string
+          vendor_id?: string | null
           expense_number: string
           stage: string
           bill_amount?: number
@@ -233,7 +233,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          vendor_id?: string
+          vendor_id?: string | null
           expense_number?: string
           stage?: string
           bill_amount?: number
@@ -264,7 +264,7 @@ export interface Database {
       expense_items: {
         Row: {
           id: string
-          expense_id: string
+          expense_id: string | null
           item_name: string
           quantity: number | null
           unit_price: number | null
@@ -273,7 +273,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          expense_id: string
+          expense_id?: string | null
           item_name: string
           quantity?: number | null
           unit_price?: number | null
@@ -282,7 +282,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          expense_id?: string
+          expense_id?: string | null
           item_name?: string
           quantity?: number | null
           unit_price?: number | null

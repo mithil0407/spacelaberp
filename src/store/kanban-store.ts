@@ -212,9 +212,11 @@ export const useKanbanStore = create<KanbanState>()(
         set(state => ({
           customers: [...state.customers, newCustomer].sort((a, b) => a.name.localeCompare(b.name))
         }))
+        return newCustomer
       } catch (error) {
         console.error('Failed to create customer:', error)
         set({ error: error instanceof Error ? error.message : 'Failed to create customer' })
+        throw error
       }
     },
 
@@ -224,9 +226,11 @@ export const useKanbanStore = create<KanbanState>()(
         set(state => ({
           vendors: [...state.vendors, newVendor].sort((a, b) => a.name.localeCompare(b.name))
         }))
+        return newVendor
       } catch (error) {
         console.error('Failed to create vendor:', error)
         set({ error: error instanceof Error ? error.message : 'Failed to create vendor' })
+        throw error
       }
     },
 
