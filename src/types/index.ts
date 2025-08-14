@@ -2,9 +2,9 @@
 export interface Customer {
   id: string;
   name: string;
-  email?: string;
-  phone?: string;
-  address?: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -12,10 +12,10 @@ export interface Customer {
 export interface Vendor {
   id: string;
   name: string;
-  contact?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
+  contact?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
   payment_terms: number;
   created_at: string;
   updated_at: string;
@@ -27,16 +27,16 @@ export interface CustomerOrder {
   order_number: string;
   stage: OrderStage;
   quote_amount: number;
-  final_price?: number;
+  final_price?: number | null;
   advance: number;
   outstanding: number;
-  primary_vendor_id?: string;
+  primary_vendor_id?: string | null;
   started_at: string;
-  due_at?: string;
-  completed_at?: string;
-  delivered_at?: string;
-  paid_at?: string;
-  notes?: string;
+  due_at?: string | null;
+  completed_at?: string | null;
+  delivered_at?: string | null;
+  paid_at?: string | null;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
   // Relations
@@ -51,9 +51,9 @@ export interface Material {
   item_name: string;
   quantity: number;
   unit: string;
-  vendor_id?: string;
+  vendor_id?: string | null;
   estimated_cost: number;
-  actual_cost?: number;
+  actual_cost?: number | null;
   created_at: string;
   updated_at: string;
   // Relations
@@ -67,11 +67,11 @@ export interface Expense {
   stage: ExpenseStage;
   bill_amount: number;
   paid_amount: number;
-  for_order_id?: string;
+  for_order_id?: string | null;
   ordered_at: string;
-  due_at?: string;
-  paid_at?: string;
-  notes?: string;
+  due_at?: string | null;
+  paid_at?: string | null;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
   // Relations
@@ -84,9 +84,9 @@ export interface ExpenseItem {
   id: string;
   expense_id: string;
   item_name: string;
-  quantity?: number;
-  unit_price?: number;
-  total_price?: number;
+  quantity?: number | null;
+  unit_price?: number | null;
+  total_price?: number | null;
   created_at: string;
 }
 
@@ -95,9 +95,9 @@ export interface Transaction {
   type: 'revenue' | 'expense';
   reference_id: string;
   amount: number;
-  payment_method?: string;
+  payment_method?: string | null;
   transaction_date: string;
-  notes?: string;
+  notes?: string | null;
   created_at: string;
 }
 
@@ -159,19 +159,19 @@ export const PROGRESS_BY_STAGE: Record<OrderStage, number> = {
 export interface OrderFormData {
   customer_id: string;
   quote_amount: number;
-  final_price?: number;
+  final_price?: number | null;
   advance: number;
-  primary_vendor_id?: string;
-  due_at?: string;
-  notes?: string;
+  primary_vendor_id?: string | null;
+  due_at?: string | null;
+  notes?: string | null;
 }
 
 export interface ExpenseFormData {
   vendor_id: string;
   bill_amount: number;
-  for_order_id?: string;
-  due_at?: string;
-  notes?: string;
+  for_order_id?: string | null;
+  due_at?: string | null;
+  notes?: string | null;
   items: string[];
 }
 
@@ -179,6 +179,6 @@ export interface MaterialFormData {
   item_name: string;
   quantity: number;
   unit: string;
-  vendor_id?: string;
+  vendor_id?: string | null;
   estimated_cost: number;
 }
