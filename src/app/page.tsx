@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { FinancialMetrics } from '@/components/FinancialMetrics'
 import { TopNavigation } from '@/components/TopNavigation'
 import { StageModal } from '@/components/modals/StageModal'
+import { CreateOrderModal } from '@/components/modals/CreateOrderModal'
+import { CreateExpenseModal } from '@/components/modals/CreateExpenseModal'
 import { useKanbanStore } from '@/store/kanban-store'
 import { Button } from '@/components/ui/button'
 
@@ -13,33 +15,15 @@ export default function HomePage() {
     loadData, 
     loading, 
     error, 
-    createOrder, 
-    createExpense,
     setError 
   } = useKanbanStore()
+
+  const [createOrderModalOpen, setCreateOrderModalOpen] = useState(false)
+  const [createExpenseModalOpen, setCreateExpenseModalOpen] = useState(false)
 
   useEffect(() => {
     loadData()
   }, [loadData])
-
-  const handleQuickAddOrder = async () => {
-    // For demo purposes, create with placeholder data
-    // In real app, this would open a modal to get customer info
-    await createOrder({
-      customer_id: '', // This should be selected from existing customers
-      quote_amount: 0,
-      notes: 'New order - needs customer details',
-    })
-  }
-
-  const handleQuickAddExpense = async () => {
-    // For demo purposes, create with placeholder data
-    await createExpense({
-      vendor_id: '', // This should be selected from existing vendors
-      bill_amount: 0,
-      notes: 'New expense - needs vendor details',
-    })
-  }
 
   if (loading) {
     return (
@@ -58,10 +42,10 @@ export default function HomePage() {
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold">Furniture Company Management</h1>
         <div className="ml-auto flex items-center gap-2">
-          <Button onClick={handleQuickAddOrder} variant="outline" size="sm">
+          <Button onClick={() => setCreateOrderModalOpen(true)} variant="outline" size="sm">
             + Order
           </Button>
-          <Button onClick={handleQuickAddExpense} variant="outline" size="sm">
+          <Button onClick={() => setCreateExpenseModalOpen(true)} variant="outline" size="sm">
             + Expense
           </Button>
           <Button 
@@ -101,6 +85,14 @@ export default function HomePage() {
 
       {/* Modals */}
       <StageModal />
+      <CreateOrderModal 
+        open={createOrderModalOpen} 
+        onClose={() => setCreateOrderModalOpen(false)} 
+      />
+      <CreateExpenseModal 
+        open={createExpenseModalOpen} 
+        onClose={() => setCreateExpenseModalOpen(false)} 
+      />
     </div>
   )
 }
