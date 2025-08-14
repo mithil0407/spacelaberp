@@ -42,7 +42,7 @@ export function debounce<T extends (...args: any[]) => any>(
   }
 }
 
-export function calculateOutstanding(finalPrice?: number, advance?: number, stage?: string): number {
+export function calculateOutstanding(finalPrice?: number | null, advance?: number | null, stage?: string): number {
   if (!finalPrice) return 0
   const paid = stage === 'Paid' ? finalPrice : (advance || 0)
   return Math.max(0, finalPrice - paid)

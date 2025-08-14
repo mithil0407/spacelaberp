@@ -77,8 +77,8 @@ export const useKanbanStore = create<KanbanState>()(
         ])
 
         set({
-          orders,
-          expenses,
+          orders: orders as CustomerOrder[],
+          expenses: expenses as Expense[],
           customers,
           vendors,
           metrics,
@@ -98,7 +98,7 @@ export const useKanbanStore = create<KanbanState>()(
         if (type === 'order') {
           const updatedOrder = await dbService.updateCustomerOrder(id, { stage: newStage as OrderStage })
           set(state => ({
-            orders: state.orders.map(o => o.id === id ? updatedOrder : o)
+            orders: state.orders.map(o => o.id === id ? (updatedOrder as CustomerOrder) : o)
           }))
           
           // Update metrics after stage change
@@ -110,7 +110,7 @@ export const useKanbanStore = create<KanbanState>()(
         } else {
           const updatedExpense = await dbService.updateExpense(id, { stage: newStage as ExpenseStage })
           set(state => ({
-            expenses: state.expenses.map(e => e.id === id ? updatedExpense : e)
+            expenses: state.expenses.map(e => e.id === id ? (updatedExpense as Expense) : e)
           }))
           
           // Update metrics after stage change
@@ -130,7 +130,7 @@ export const useKanbanStore = create<KanbanState>()(
       try {
         const updatedOrder = await dbService.updateCustomerOrder(id, updates)
         set(state => ({
-          orders: state.orders.map(o => o.id === id ? updatedOrder : o)
+          orders: state.orders.map(o => o.id === id ? (updatedOrder as CustomerOrder) : o)
         }))
         
         // Update metrics if financial data changed
@@ -148,7 +148,7 @@ export const useKanbanStore = create<KanbanState>()(
       try {
         const updatedExpense = await dbService.updateExpense(id, updates)
         set(state => ({
-          expenses: state.expenses.map(e => e.id === id ? updatedExpense : e)
+          expenses: state.expenses.map(e => e.id === id ? (updatedExpense as Expense) : e)
         }))
         
         // Update metrics if financial data changed
@@ -173,7 +173,7 @@ export const useKanbanStore = create<KanbanState>()(
         })
         
         set(state => ({
-          orders: [newOrder, ...state.orders]
+          orders: [(newOrder as CustomerOrder), ...state.orders]
         }))
         
         const metrics = await dbService.getFinancialMetrics()
@@ -195,7 +195,7 @@ export const useKanbanStore = create<KanbanState>()(
         })
         
         set(state => ({
-          expenses: [newExpense, ...state.expenses]
+          expenses: [(newExpense as Expense), ...state.expenses]
         }))
         
         const metrics = await dbService.getFinancialMetrics()
